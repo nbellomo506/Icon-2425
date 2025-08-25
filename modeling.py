@@ -1,0 +1,148 @@
+from typing import List, Tuple
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.compose import ColumnTransformer
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.impute import SimpleImputer
+from sklearn.feature_selection import SelectKBest, f_classif
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.calibration import CalibratedClassifierCV
+from sklearn.metrics import (
+    accuracy_score,
+    roc_auc_score,
+    confusion_matrix,
+    ConfusionMatrixDisplay,
+    classification_report,
+    f1_score,
+    roc_curve,
+)
+from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold
+
+from config import RANDOM_STATE, CV_SPLITS, MODEL_PATH
+from data import add_domain_features, guess_target_column
+
+
+def build_preprocessor(df: pd.DataFrame):
+    target = guess_target_column(df)
+    cat_cols = [c for c in df.columns if (df[c].dtype == "object" or str(df[c].dtype).startswith("category")) and c != target]
+    num_cols = [c for c in df.columns if c not in cat_cols + [target]]
+
+    numeric_t = Pipeline([
+        ("impute", SimpleImputer(strategy="median")),
+        ("scale", StandardScaler()),
+    ])
+    cat_t = Pipeline([
+        ("impute", SimpleImputer(strategy="most_frequent")),
+        ("oh", OneHotEncoder(handle_unknown="ignore")),
+    ])
+
+    preprocessor = ColumnTransformer([
+        ("num", numeric_t, num_cols),
+        ("cat", cat_t, cat_cols),
+    ])
+
+    selector = SelectKBest(score_func=f_classif, k="all")
+    return preprocessor, selector, target, num_cols + cat_cols
+
+
+def reliability_curve(y_true: np.ndarray, y_proba: np.ndarray, bins: int = 10):
+    y_true = np.asarray(y_true).astype(float)
+    y_proba = np.asarray(y_proba).astype(float)
+    edges = np.linspace(0.0, 1.0, bins + 1)
+    idx = np.digitize(y_proba, edges[1:-1], right=False)
+    preds, obs = [], []
+    for b in range(bins):
+        mask = (idx == b)
+        if np.any(mask):
+            preds.append(float(np.mean(y_proba[mask])))
+            obs.append(float(np.mean(y_true[mask])))
+    return np.array(preds), np.array(obs)
+
+
+def train_model(df: pd.DataFrame, save_path=MODEL_PATH):
+    df = add_domain_features(df)
+    pre, selector, target, feats = build_preprocessor(df)
+
+    X, y = df[feats], df[target]
+
+    X_train_full, X_test, y_train_full, y_test = train_test_split(
+        X, y, test_size=0.2, stratify=y, random_state=RANDOM_STATE
+    )
+
+    X_fit, X_cal, y_fit, y_cal = train_test_split(
+        X_train_full, y_train_full, test_size=0.2, stratify=y_train_full, random_state=RANDOM_STATE
+    )
+
+    clf = RandomForestClassifier(
+        n_estimators=300,
+        n_jobs=-1,
+        class_weight="balanced",
+        random_state=RANDOM_STATE,
+    )
+
+    pipe = Pipeline([("pre", pre), ("sel", selector), ("clf", clf)])
+
+    cv = StratifiedKFold(n_splits=CV_SPLITS, shuffle=True, random_state=RANDOM_STATE)
+    cv_scores = cross_val_score(pipe, X_train_full, y_train_full, cv=cv, scoring="roc_auc", n_jobs=-1)
+    print(f"ROC-AUC media (CV={CV_SPLITS}): {cv_scores.mean():.3f} ± {cv_scores.std():.3f}")
+
+    pipe.fit(X_fit, y_fit)
+
+    method = "isotonic" if len(y_cal) >= 100 else "sigmoid"
+    cal = CalibratedClassifierCV(pipe, method=method, cv="prefit")
+    cal.fit(X_cal, y_cal)
+    print(f"Calibrazione probabilita: metodo = {method}")
+
+    proba_cal = cal.predict_proba(X_cal)[:, 1]
+
+    ths = np.linspace(0.0, 1.0, 1001)
+    f1s = [f1_score(y_cal, (proba_cal >= t).astype(int), average="weighted", zero_division=0) for t in ths]
+    best_f1_thr = float(ths[int(np.argmax(f1s))])
+
+    fpr, tpr, roc_thrs = roc_curve(y_cal, proba_cal)
+    youden = tpr - fpr
+    best_youden_thr = float(roc_thrs[int(np.argmax(youden))])
+
+    print(f"Soglia ottima (validation) F1-weighted: {best_f1_thr:.3f}")
+    print(f"Soglia ottima (validation) Youden J:    {best_youden_thr:.3f}")
+
+    proba_test = cal.predict_proba(X_test)[:, 1]
+    y_pred_05 = (proba_test >= 0.50).astype(int)
+
+    acc = accuracy_score(y_test, y_pred_05)
+    auc = roc_auc_score(y_test, proba_test)
+    print("\n=== Performance su test (probabilita calibrate) ===")
+    print(f"Accuracy @0.50: {acc:.3f}\nROC-AUC (calibr.): {auc:.3f}\n")
+    print(classification_report(y_test, y_pred_05, target_names=["Sano", "Parkinson"]))
+
+    cm = confusion_matrix(y_test, y_pred_05)
+    disp = ConfusionMatrixDisplay(cm, display_labels=["Sano", "Parkinson"])
+    disp.plot()
+    plt.title("Confusion matrix (test) - soglia 0.50 (prob. calibrate)")
+    plt.show()
+
+    px, ox = reliability_curve(getattr(y_test, "values", y_test), proba_test, bins=10)
+    plt.figure()
+    plt.plot([0, 1], [0, 1], linestyle="--")
+    if len(px) > 0:
+        plt.plot(px, ox, marker="o")
+    plt.xlabel("Predicted probability")
+    plt.ylabel("Observed frequency")
+    plt.title("Reliability diagram (test)")
+    plt.grid(True, alpha=0.3)
+    plt.show()
+
+    best_thresholds = {"f1_weighted": best_f1_thr, "youden": best_youden_thr}
+    payload = {
+        "model": cal,
+        "thresholds": best_thresholds,
+        "features": feats,
+        "calibrated": True,
+        "calibration": {"method": method}
+    }
+
+    import joblib
+    joblib.dump(payload, save_path)
+    print(f"Modello calibrato e soglie salvati in {save_path.resolve()}")
