@@ -8,7 +8,7 @@ Realizzato da: Carbone Giuseppe Emanuele
 **-Clonare**  
 Per quanto riguarda l' esecuzione del progetto, bisogna innanzitutto clonare il repository eseguendo il seguente comando:  
 ```
-git clone https://github.com/Peppeecarbo/ICON-24-25.git
+git clone https://github.com/nbellomo506/Icon-2425
 ```
 Il progetto è stato sviluppato interamente in Python nella versione **3.13** . Sarà necessario quindi Python.  
 ***
