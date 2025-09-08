@@ -20,6 +20,8 @@ from sklearn.metrics import (
     classification_report,
     f1_score,
     roc_curve,
+    precision_score,
+    recall_score,
 )
 from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold
 
@@ -162,6 +164,8 @@ def _metrics_at(y_true: np.ndarray, y_proba: np.ndarray, thr: float) -> dict:
     return {
         "F1_weighted": float(f1_score(y_true, y_pred, average="weighted", zero_division=0)),
         "Accuracy": float(accuracy_score(y_true, y_pred)),
+        "Precision": float(precision_score(y_true, y_pred, average="weighted", zero_division=0)),
+        "Recall": float(recall_score(y_true, y_pred, pos_label=1)),
     }
 
 def _best_thresholds(y_val: np.ndarray, p_val: np.ndarray, grid_points: int = 201) -> dict:
@@ -258,6 +262,8 @@ def kfold_metrics_matrix(
                 "threshold": float(tval),
                 "F1_weighted": met["F1_weighted"],
                 "Accuracy": met["Accuracy"],
+                "Precision": met["Precision"],
+                "Recall": met["Recall"],
             })
 
     df_detailed = pd.DataFrame(rows).sort_values(["fold", "threshold_name"]).reset_index(drop=True)
@@ -266,6 +272,10 @@ def kfold_metrics_matrix(
     agg = df_detailed.groupby("threshold_name").agg(
         F1_mean=("F1_weighted", "mean"),
         F1_std =("F1_weighted", "std"),
+        PREC_mean=("Precision", "mean"),
+        PREC_std =("Precision", "std"),
+        REC_mean=("Recall", "mean"),
+        REC_std =("Recall", "std"),
         ACC_mean=("Accuracy", "mean"),
         ACC_std =("Accuracy", "std"),
         thr_mean=("threshold", "mean"),
@@ -312,6 +322,10 @@ def repeated_cv_table(
     summary = detailed.groupby("threshold_name").agg(
         F1_mean=("F1_weighted", "mean"),
         F1_std =("F1_weighted", "std"),
+        PREC_mean=("Precision", "mean"),
+        PREC_std =("Precision", "std"),
+        REC_mean=("Recall", "mean"),
+        REC_std =("Recall", "std"),
         ACC_mean=("Accuracy", "mean"),
         ACC_std =("Accuracy", "std"),
         thr_mean=("threshold", "mean"),
@@ -319,7 +333,6 @@ def repeated_cv_table(
         n=("threshold", "count"),
     ).reset_index()
 
-    # --- Path handling
     dir_path = Path(outdir) if outdir else None
     if dir_path:
         dir_path.mkdir(parents=True, exist_ok=True)
