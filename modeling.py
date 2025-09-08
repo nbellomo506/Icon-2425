@@ -11,6 +11,7 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.impute import SimpleImputer
 from sklearn.feature_selection import SelectKBest, f_classif
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold, learning_curve
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.metrics import (
     accuracy_score,
@@ -370,3 +371,93 @@ def repeated_cv_table(
         json.dump(payload, f, indent=2, ensure_ascii=False)
 
     print(f"[OK] Salvati:\n- CSV:  {csv_path.resolve()}\n- JSON: {json_path.resolve()}")
+
+# ========================
+# Learning Curve (single run)
+# ========================
+def plot_learning_curve_single_run(
+    df: pd.DataFrame,
+    seed: int = 42,
+    splits: int = 5,
+    n_estimators: int = 300,
+    sizes: int | list = 8,
+    scoring: str = "f1_weighted",
+    out_png: str | Path = "learning_curve_single_run.png",
+    out_csv: str | Path | None = None,
+    title: str | None = None,
+) -> tuple[Path, Path | None]:
+    """
+    Genera e salva il grafico della learning curve per **un singolo run**.
+    - Usa StratifiedKFold(shuffle=True, random_state=seed).
+    - Default: F1_weighted.
+    Ritorna (percorso PNG, percorso CSV).
+    """
+    import matplotlib.pyplot as plt
+    df = add_domain_features(df)
+    pre, selector, target, feats = build_preprocessor(df)
+    X, y = df[feats], df[target].astype(int)
+
+    clf = RandomForestClassifier(
+        n_estimators=n_estimators,
+        n_jobs=-1,
+        class_weight="balanced",
+        random_state=seed,
+    )
+    pipe = Pipeline([("pre", pre), ("sel", selector), ("clf", clf)])
+    cv = StratifiedKFold(n_splits=splits, shuffle=True, random_state=seed)
+
+    # Dimensioni del training set
+    if isinstance(sizes, int):
+        train_sizes = np.linspace(0.1, 1.0, sizes)
+    else:
+        train_sizes = np.array(sizes, dtype=float)
+
+    ts, train_scores, val_scores = learning_curve(
+        estimator=pipe,
+        X=X,
+        y=y,
+        train_sizes=train_sizes,
+        cv=cv,
+        scoring=scoring,
+        n_jobs=-1,
+        verbose=0,
+    )
+
+    train_mean, train_std = train_scores.mean(axis=1), train_scores.std(axis=1)
+    val_mean, val_std     = val_scores.mean(axis=1), val_scores.std(axis=1)
+
+    # Grafico
+    plt.figure(figsize=(8, 5))
+    plt.plot(ts, train_mean, marker="o", label="Training")
+    plt.fill_between(ts, train_mean - train_std, train_mean + train_std, alpha=0.15)
+    plt.plot(ts, val_mean, marker="s", label="Cross-Validation")
+    plt.fill_between(ts, val_mean - val_std, val_mean + val_std, alpha=0.15)
+    plt.xlabel("Training set size")
+    plt.ylabel(scoring)
+    if title is None:
+        title = f"Learning Curve (seed={seed}, splits={splits}, n_estimators={n_estimators})"
+    plt.title(title)
+    plt.legend()
+    out_png = Path(out_png)
+    out_png.parent.mkdir(parents=True, exist_ok=True)
+    plt.tight_layout()
+    plt.savefig(out_png, dpi=150)
+    plt.close()
+
+    out_csv_path = None
+    if out_csv is not None:
+        out_csv_path = Path(out_csv)
+        out_csv_path.parent.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame({
+            "train_size": ts,
+            "train_mean": train_mean,
+            "train_std":  train_std,
+            "val_mean":   val_mean,
+            "val_std":    val_std,
+            "scoring":    scoring,
+            "seed":       seed,
+            "splits":     splits,
+            "n_estimators": n_estimators,
+        }).to_csv(out_csv_path, index=False)
+
+    return out_png, out_csv_path

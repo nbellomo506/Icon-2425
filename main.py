@@ -28,14 +28,16 @@ def cli() -> None:
     s_runs.add_argument("--csv", default=None) 
     s_runs.add_argument("--json", default=None)
 
-
-    # Learning curve per singolo run
-    s_lc = sub.add_parser("learning-curve", help="Grafico learning curve per un singolo run")
+    s_lc = sub.add_parser("learning-curve", help="Learning curve per singolo run")
     s_lc.add_argument("--seed", type=int, default=42)
-    s_lc.add_argument("--method", choices=["sigmoid", "isotonic"], default="sigmoid")
+    s_lc.add_argument("--splits", type=int, default=5)
     s_lc.add_argument("--n_estimators", type=int, default=300)
-    s_lc.add_argument("--test_size", type=float, default=0.2)
-    s_lc.add_argument("--out", default="learning_curve_single_run.png")
+    s_lc.add_argument("--sizes", type=int, default=8)
+    s_lc.add_argument("--scoring", default="f1_weighted")
+    s_lc.add_argument("--outdir", default="results/learning_curves")
+
+
+
 
 
     s_all = sub.add_parser("all-in-one", help="Build KB + Reason + HTML in one go")
@@ -139,16 +141,23 @@ def cli() -> None:
 
     elif args.cmd == "learning-curve":
         df = carica_dataset()
-        from modeling import learning_curve_single_run
-        png = learning_curve_single_run(
+        from modeling import plot_learning_curve_single_run
+        outdir = Path(args.outdir)
+        outdir.mkdir(parents=True, exist_ok=True)
+        png_path = outdir / f"learning_curve_seed{args.seed}.png"
+        csv_path = outdir / f"learning_curve_seed{args.seed}.csv"
+        plot_learning_curve_single_run(
             df,
             seed=args.seed,
-            method=args.method,
+            splits=args.splits,
             n_estimators=args.n_estimators,
-            test_size=args.test_size,
-            out_png=args.out,
+            sizes=args.sizes,
+            scoring=args.scoring,
+            out_png=str(png_path),
+            out_csv=str(csv_path),
         )
-        print(f"Creato: {png}")
+        print(f"[LC] Salvati:\n- PNG:  {png_path.resolve()}\n- CSV:  {csv_path.resolve()}")
+
 
 
     elif args.cmd == "all-in-one":
