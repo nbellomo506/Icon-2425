@@ -55,3 +55,11 @@ Effettuabile solamente dopo aver eseguito il train, applica regole KB e calcola 
 python main.py all-in-one --csv parkinsons_disease_dataset.csv --json paziente_random.json --model parkinson_model.joblib --thr youden --out report.html
 ```
 Il comando, effettuabile solo dopo aver eseguito il train e il predict, effettua una valutazione completa del rischio di Parkinson per un paziente: carica il dataset, il modello e i dati clinici, calcola la probabilità e la diagnosi usando la soglia di Youden, stima il rischio fuzzy e genera un report HTML con risultati e spiegazioni.
+```
+python main.py runs --repeats 1 --splits 5 --method sigmoid --n_estimators 200 --grid_points 101 --outdir results --csv cv_runs.csv --json cv_runs.json
+```
+Il comando esegue una cross-validation ripetuta (1 volta, con 5 fold ciascuna) usando una RandomForest con 200 alberi e calibrazione sigmoid. Per ogni run calcola le metriche (F1, Precision, Recall, Accuracy) a varie soglie di decisione e alla fine produce: un file CSV con le medie e deviazioni standard delle metriche e un file JSON con i dettagli di tutti i run.
+```
+python main.py learning-curve --seed 42 --splits 5 --n_estimators 200 --sizes 8 --scoring f1_weighted --outdir results/learning_curves
+```
+Il comando genera la learning curve di un singolo run (controllato da seed=42) usando una RandomForest con 200 alberi e 5-fold CV. Calcola la metrica F1_weighted su 8 taglie di training (dal ~10% al 100%) e produce il grafico con bande media±std tra training e cross-validation
