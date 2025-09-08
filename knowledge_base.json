@@ -1,0 +1,123 @@
+{
+  "thresholds": {
+    "jitter_pct": {
+      "feature_canonical": "jitter_pct",
+      "operator": ">",
+      "value": 4.74,
+      "source": "data_quantile_auto",
+      "note": "auto from data (healthy/all quantile)",
+      "severity": "MEDIUM"
+    },
+    "shimmer_db": {
+      "feature_canonical": "shimmer_db",
+      "operator": ">",
+      "value": 4.74,
+      "source": "data_quantile_auto",
+      "note": "auto from data (healthy/all quantile)",
+      "severity": "MEDIUM"
+    },
+    "hnr_db": {
+      "feature_canonical": "hnr_db",
+      "operator": "<",
+      "value": 20.32,
+      "source": "data_quantile_auto",
+      "note": "auto from data (healthy/all quantile)",
+      "severity": "MEDIUM"
+    },
+    "Age": {
+      "feature_canonical": "Age",
+      "operator": "<",
+      "value": 42.0,
+      "source": "data_quantile_auto",
+      "note": "auto from data (healthy/all quantile)",
+      "severity": "MEDIUM"
+    },
+    "Tremor_Intensity": {
+      "feature_canonical": "Tremor_Intensity",
+      "operator": "<",
+      "value": 0.5,
+      "source": "data_quantile_auto",
+      "note": "auto from data (healthy/all quantile)",
+      "severity": "MEDIUM"
+    },
+    "Voice_Pitch": {
+      "feature_canonical": "Voice_Pitch",
+      "operator": ">",
+      "value": 289.37399999999997,
+      "source": "data_quantile_auto",
+      "note": "auto from data (healthy/all quantile)",
+      "severity": "MEDIUM"
+    },
+    "Bradykinesia_Score": {
+      "feature_canonical": "Bradykinesia_Score",
+      "operator": "<",
+      "value": 0.54,
+      "source": "data_quantile_auto",
+      "note": "auto from data (healthy/all quantile)",
+      "severity": "MEDIUM"
+    },
+    "Postural_Instability": {
+      "feature_canonical": "Postural_Instability",
+      "operator": "<",
+      "value": 0.5430000000000007,
+      "source": "data_quantile_auto",
+      "note": "auto from data (healthy/all quantile)",
+      "severity": "MEDIUM"
+    },
+    "Rigidity_Level": {
+      "feature_canonical": "Rigidity_Level",
+      "operator": ">",
+      "value": 9.52,
+      "source": "data_quantile_auto",
+      "note": "auto from data (healthy/all quantile)",
+      "severity": "MEDIUM"
+    },
+    "UPDRS_Score": {
+      "feature_canonical": "UPDRS_Score",
+      "operator": ">",
+      "value": 94.64699999999999,
+      "source": "data_quantile_auto",
+      "note": "auto from data (healthy/all quantile)",
+      "severity": "MEDIUM"
+    },
+    "Handwriting_Change": {
+      "feature_canonical": "Handwriting_Change",
+      "operator": ">",
+      "value": 9.52,
+      "source": "data_quantile_auto",
+      "note": "auto from data (healthy/all quantile)",
+      "severity": "MEDIUM"
+    },
+    "Walking_Difficulty": {
+      "feature_canonical": "Walking_Difficulty",
+      "operator": "<",
+      "value": 0.5,
+      "source": "data_quantile_auto",
+      "note": "auto from data (healthy/all quantile)",
+      "severity": "MEDIUM"
+    },
+    "MRI_Score": {
+      "feature_canonical": "MRI_Score",
+      "operator": "<",
+      "value": 5.14,
+      "source": "data_quantile_auto",
+      "note": "auto from data (healthy/all quantile)",
+      "severity": "MEDIUM"
+    }
+  },
+  "mapping": {
+    "jitter_pct": "Jitter(%)",
+    "shimmer_db": "Shimmer(dB)",
+    "hnr_db": "HNR",
+    "Age": "Age",
+    "Tremor_Intensity": "Tremor_Intensity",
+    "Voice_Pitch": "Voice_Pitch",
+    "Bradykinesia_Score": "Bradykinesia_Score",
+    "Postural_Instability": "Postural_Instability",
+    "Rigidity_Level": "Rigidity_Level",
+    "UPDRS_Score": "UPDRS_Score",
+    "Handwriting_Change": "Handwriting_Change",
+    "Walking_Difficulty": "Walking_Difficulty",
+    "MRI_Score": "MRI_Score"
+  }
+}

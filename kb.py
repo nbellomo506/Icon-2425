@@ -21,6 +21,7 @@ def canonical_feature_mapping(df: pd.DataFrame) -> Dict[str, Optional[str]]:
                 return orig
         return None
 
+    # Manteniamo le 3 canoniche, se presenti
     jitter_pct = None
     for low, orig in cols.items():
         if "jitter" in low and "%" in low:
@@ -28,7 +29,26 @@ def canonical_feature_mapping(df: pd.DataFrame) -> Dict[str, Optional[str]]:
             break
     shimmer_db = find_contains("shimmer", "db")
     hnr_db = find_contains("hnr")
-    return {"jitter_pct": jitter_pct, "shimmer_db": shimmer_db, "hnr_db": hnr_db}
+
+    mapping = {}
+    if jitter_pct: mapping["jitter_pct"] = jitter_pct
+    if shimmer_db: mapping["shimmer_db"] = shimmer_db
+    if hnr_db:     mapping["hnr_db"] = hnr_db
+
+    # Aggiungi TUTTE le colonne numeriche (identità: "colonna" -> "colonna"), esclusa la target
+    try:
+        target = guess_target_column(df)
+    except Exception:
+        target = None
+    num_cols = df.select_dtypes(include="number").columns.tolist()
+    if target in num_cols:
+        num_cols.remove(target)
+
+    for col in num_cols:
+        if col not in mapping.values():    # evita duplicati con le 3 canoniche
+            mapping[col] = col
+
+    return mapping
 
 
 class SeverityLevel(Enum):
@@ -148,23 +168,40 @@ def populate_defaults(kb: MiniKB):
 
 
 def refine_from_data(kb: MiniKB, df: pd.DataFrame, target_col: Optional[str]):
+    # Assicura il mapping aggiornato
     mapping = kb._mapping or canonical_feature_mapping(df)
     kb.set_mapping(mapping)
+
+    # Base per i quantili: preferisci i 'sani' se la target c'è ed è abbastanza numerosa
     base = df
     if target_col in df.columns and (df[target_col] == 0).sum() >= 15:
         base = df[df[target_col] == 0]
-    if mapping.get("jitter_pct"):
-        s = _num(base[mapping["jitter_pct"]]).dropna()
-        if len(s) >= 10:
-            kb.insert_threshold(Threshold("jitter_pct", ">", float(np.quantile(s, 0.95)), "data_quantile_0.95", note="95th perc healthy/all"))
-    if mapping.get("shimmer_db"):
-        s = _num(base[mapping["shimmer_db"]]).dropna()
-        if len(s) >= 10:
-            kb.insert_threshold(Threshold("shimmer_db", ">", float(np.quantile(s, 0.95)), "data_quantile_0.95", note="95th perc healthy/all"))
-    if mapping.get("hnr_db"):
-        s = _num(base[mapping["hnr_db"]]).dropna()
-        if len(s) >= 10:
-            kb.insert_threshold(Threshold("hnr_db", "<", float(np.quantile(s, 0.05)), "data_quantile_0.05", note="5th perc healthy/all"))
+
+    for feat_key, col in mapping.items():
+        if not col or col not in df.columns:
+            continue
+        s_all = _num(df[col]).dropna()
+        s_base = _num(base[col]).dropna()
+        if len(s_base) < 10 or s_all.empty:
+            continue
+
+        # Direzione dell’anomalia: se ho la target, confronto media dei positivi vs sani
+        if target_col in df.columns and set(df[target_col].unique()) >= {0, 1}:
+            pos_mean = _num(df[df[target_col] == 1][col]).mean()
+            neg_mean = _num(df[df[target_col] == 0][col]).mean()
+            op = ">" if (pd.notna(pos_mean) and pd.notna(neg_mean) and pos_mean >= neg_mean) else "<"
+        else:
+            op = ">"  # fallback conservativo
+
+        thr = float(np.quantile(s_base, 0.95 if op == ">" else 0.05))
+        kb.insert_threshold(Threshold(
+            feature_canonical=feat_key,
+            operator=op,
+            value=thr,
+            source="data_quantile_auto",
+            note="auto from data (healthy/all quantile)"
+            
+        ))
 
 
 def build_kb_from_dataset(df: pd.DataFrame) -> ExtendedKB:
