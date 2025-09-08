@@ -15,6 +15,28 @@ from rdf_kb import run_full_pipeline
 def cli() -> None:
     p = argparse.ArgumentParser(description="Classifier Parkinson (Ricerca-Ragionamento-Apprendimento)")
     sub = p.add_subparsers(dest="cmd", required=True)
+    # --- NUOVO CODICE CLI ---
+
+    # Valutazione su più run (Repeated K-Fold) con tabella medie±std
+    s_runs = sub.add_parser("runs", help="Repeated CV: medie±dev.std su più run e salvataggi CSV/JSON")
+    s_runs.add_argument("--repeats", type=int, default=10)
+    s_runs.add_argument("--splits", type=int, default=5)
+    s_runs.add_argument("--method", choices=["sigmoid", "isotonic"], default="sigmoid")
+    s_runs.add_argument("--n_estimators", type=int, default=300)
+    s_runs.add_argument("--grid_points", type=int, default=201)
+    s_runs.add_argument("--outdir", default="results")          # <--- NEW (puoi scegliere il nome che vuoi)
+    s_runs.add_argument("--csv", default=None) 
+    s_runs.add_argument("--json", default=None)
+
+
+    # Learning curve per singolo run
+    s_lc = sub.add_parser("learning-curve", help="Grafico learning curve per un singolo run")
+    s_lc.add_argument("--seed", type=int, default=42)
+    s_lc.add_argument("--method", choices=["sigmoid", "isotonic"], default="sigmoid")
+    s_lc.add_argument("--n_estimators", type=int, default=300)
+    s_lc.add_argument("--test_size", type=float, default=0.2)
+    s_lc.add_argument("--out", default="learning_curve_single_run.png")
+
 
     s_all = sub.add_parser("all-in-one", help="Build KB + Reason + HTML in one go")
     s_all.add_argument("--csv", default=str(DATASET_PATH))
@@ -99,6 +121,35 @@ def cli() -> None:
 
     elif args.cmd == "random_patient":
         genera_paziente_random(args.csv, args.out)
+    
+    elif args.cmd == "runs":
+        df = carica_dataset()
+        from modeling import repeated_cv_table
+        repeated_cv_table(
+            df,
+            repeats=args.repeats,
+            splits=args.splits,
+            method=args.method,
+            n_estimators=args.n_estimators,
+            grid_points=args.grid_points,
+            outdir=args.outdir,
+            out_csv=args.csv,
+            out_json=args.json,
+        )
+
+    elif args.cmd == "learning-curve":
+        df = carica_dataset()
+        from modeling import learning_curve_single_run
+        png = learning_curve_single_run(
+            df,
+            seed=args.seed,
+            method=args.method,
+            n_estimators=args.n_estimators,
+            test_size=args.test_size,
+            out_png=args.out,
+        )
+        print(f"Creato: {png}")
+
 
     elif args.cmd == "all-in-one":
         html = run_full_pipeline(

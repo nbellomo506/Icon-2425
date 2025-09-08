@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import List, Tuple
 import numpy as np
 import pandas as pd
@@ -280,32 +281,34 @@ def repeated_cv_table(
     method: str = "sigmoid",
     n_estimators: int = 300,
     grid_points: int = 201,
-    out_csv: str = "runs_summary.csv",
-    out_json: str = "runs_detailed.json",
+    outdir: str | None = None,          # <--- NEW
+    out_csv: str | None = None,
+    out_json: str | None = None,
 ) -> None:
     """
-    Esegue piu' run (seed diversi). Salva:
-      - CSV con media/std aggregata su *tutti* i fold e run per ogni soglia
-      - JSON con dettagli per ripetizione e fold (la tua matrice 5x3 per ciascun run)
-    """
-    all_rows = []
-    all_agg = []
+    Esegue più run (semi diversi) e salva:
+      - CSV: media/std aggregata su *tutti* i fold e run per ogni soglia
+      - JSON: dettagli (repeat × fold × soglia)
 
-    for r in range(repeats):
+    Se 'outdir' è fornita, crea la cartella e salva lì i file.
+    Se 'out_csv' / 'out_json' sono solo nomi (senza path), li salva dentro outdir.
+    Se 'out_csv' / 'out_json' includono già un percorso, quello viene rispettato.
+    """
+    k = int(splits)
+    R = int(repeats)
+
+    all_rows = []
+    for r in range(R):
         seed = RANDOM_STATE + r
-        df_det, df_agg = kfold_metrics_matrix(
-            df, splits=splits, method=method, n_estimators=n_estimators, grid_points=grid_points, seed=seed
+        df_det, _ = kfold_metrics_matrix(
+            df, splits=k, method=method, n_estimators=n_estimators, grid_points=grid_points, seed=seed
         )
         df_det = df_det.copy()
         df_det["repeat"] = r + 1
         all_rows.append(df_det)
 
-        df_agg = df_agg.copy()
-        df_agg["repeat"] = r + 1
-        all_agg.append(df_agg)
-
     detailed = pd.concat(all_rows, ignore_index=True)
-    # Aggrego su tutte le ripetizioni
+
     summary = detailed.groupby("threshold_name").agg(
         F1_mean=("F1_weighted", "mean"),
         F1_std =("F1_weighted", "std"),
@@ -313,22 +316,44 @@ def repeated_cv_table(
         ACC_std =("Accuracy", "std"),
         thr_mean=("threshold", "mean"),
         thr_std =("threshold", "std"),
+        n=("threshold", "count"),
     ).reset_index()
 
-    # Salvataggi
-    summary.to_csv(out_csv, index=False)
+    # --- Path handling
+    dir_path = Path(outdir) if outdir else None
+    if dir_path:
+        dir_path.mkdir(parents=True, exist_ok=True)
 
+    # fallback dinamici se non passati
+    auto_csv_name  = f"k{k}_r{R}_summary.csv"
+    auto_json_name = f"k{k}_r{R}_detailed.json"
+
+    # CSV
+    if out_csv is None:
+        csv_path = (dir_path / auto_csv_name) if dir_path else Path(auto_csv_name)
+    else:
+        given = Path(out_csv)
+        csv_path = given if given.parent != Path("") else ((dir_path / given.name) if dir_path else given)
+
+    # JSON
+    if out_json is None:
+        json_path = (dir_path / auto_json_name) if dir_path else Path(auto_json_name)
+    else:
+        given = Path(out_json)
+        json_path = given if given.parent != Path("") else ((dir_path / given.name) if dir_path else given)
+
+    # --- Salvataggi
+    summary.to_csv(csv_path, index=False)
     payload = {
-        "repeats": repeats,
-        "splits": splits,
+        "repeats": R,
+        "splits": k,
         "method": method,
         "n_estimators": n_estimators,
         "grid_points": grid_points,
         "rows": detailed.to_dict(orient="records"),
         "summary": summary.to_dict(orient="records"),
     }
-    import json
-    with open(out_json, "w", encoding="utf-8") as f:
+    with open(json_path, "w", encoding="utf-8") as f:
         json.dump(payload, f, indent=2, ensure_ascii=False)
 
-    print(f"[OK] Salvati:\n- CSV: {out_csv}\n- JSON: {out_json}")
+    print(f"[OK] Salvati:\n- CSV:  {csv_path.resolve()}\n- JSON: {json_path.resolve()}")
