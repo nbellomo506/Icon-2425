@@ -15,11 +15,9 @@ from rdf_kb import run_full_pipeline
 def cli() -> None:
     p = argparse.ArgumentParser(description="Classifier Parkinson (Ricerca-Ragionamento-Apprendimento)")
     sub = p.add_subparsers(dest="cmd", required=True)
-    # --- NUOVO CODICE CLI ---
-
-    # Valutazione su più run (Repeated K-Fold) con tabella medie±std
+    
     s_runs = sub.add_parser("runs", help="Repeated CV: medie±dev.std su più run e salvataggi CSV/JSON")
-    s_runs.add_argument("--repeats", type=int, default=10)
+    s_runs.add_argument("--repeats", type=int, default=1)
     s_runs.add_argument("--splits", type=int, default=5)
     s_runs.add_argument("--method", choices=["sigmoid", "isotonic"], default="sigmoid")
     s_runs.add_argument("--n_estimators", type=int, default=300)

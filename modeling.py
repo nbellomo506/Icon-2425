@@ -11,6 +11,8 @@ from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.impute import SimpleImputer
 from sklearn.feature_selection import SelectKBest, f_classif
 from sklearn.ensemble import RandomForestClassifier
+from dataclasses import asdict
+from sklearn.model_selection import StratifiedKFold
 from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold, learning_curve
 from sklearn.calibration import CalibratedClassifierCV
 from sklearn.metrics import (
@@ -152,14 +154,6 @@ def train_model(df: pd.DataFrame, save_path=MODEL_PATH):
     joblib.dump(payload, save_path)
     print(f"Modello calibrato e soglie salvati in {save_path.resolve()}")
 
-
-
-
-
-
-from dataclasses import asdict
-from sklearn.model_selection import StratifiedKFold
-
 def _metrics_at(y_true: np.ndarray, y_proba: np.ndarray, thr: float) -> dict:
     y_pred = (y_proba >= thr).astype(int)
     return {
@@ -187,7 +181,6 @@ def _build_calibrated(df: pd.DataFrame, method: str, n_estimators: int, seed: in
     X = df[feats]
     y = df[target]
 
-    # split train -> fit/calib (come in train_model)
     X_fit, X_cal, y_fit, y_cal = train_test_split(
         X, y, test_size=0.2, stratify=y, random_state=seed
     )
@@ -208,16 +201,12 @@ def _build_calibrated(df: pd.DataFrame, method: str, n_estimators: int, seed: in
 def kfold_metrics_matrix(
     df: pd.DataFrame,
     splits: int = 5,
-    method: str = "sigmoid",      # oppure "isotonic"
+    method: str = "sigmoid",   
     n_estimators: int = 300,
     grid_points: int = 201,
     seed: int = 42,
 ) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """
-    Restituisce:
-      - df_detailed: matrice 5x3 (fold x soglie) con F1_weighted e Accuracy
-      - df_summary: media e std per soglia (su 5 fold)
-    """
+
     df = add_domain_features(df)
     pre, selector, target, feats = build_preprocessor(df)
     X = df[feats]
@@ -292,19 +281,11 @@ def repeated_cv_table(
     method: str = "sigmoid",
     n_estimators: int = 300,
     grid_points: int = 201,
-    outdir: str | None = None,          # <--- NEW
+    outdir: str | None = None,     
     out_csv: str | None = None,
     out_json: str | None = None,
 ) -> None:
-    """
-    Esegue più run (semi diversi) e salva:
-      - CSV: media/std aggregata su *tutti* i fold e run per ogni soglia
-      - JSON: dettagli (repeat × fold × soglia)
 
-    Se 'outdir' è fornita, crea la cartella e salva lì i file.
-    Se 'out_csv' / 'out_json' sono solo nomi (senza path), li salva dentro outdir.
-    Se 'out_csv' / 'out_json' includono già un percorso, quello viene rispettato.
-    """
     k = int(splits)
     R = int(repeats)
 
@@ -386,12 +367,7 @@ def plot_learning_curve_single_run(
     out_csv: str | Path | None = None,
     title: str | None = None,
 ) -> tuple[Path, Path | None]:
-    """
-    Genera e salva il grafico della learning curve per **un singolo run**.
-    - Usa StratifiedKFold(shuffle=True, random_state=seed).
-    - Default: F1_weighted.
-    Ritorna (percorso PNG, percorso CSV).
-    """
+
     import matplotlib.pyplot as plt
     df = add_domain_features(df)
     pre, selector, target, feats = build_preprocessor(df)
